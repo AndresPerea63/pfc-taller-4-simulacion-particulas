@@ -17,33 +17,83 @@ class SimulacionParticulas {
   // Punto 1: un paso de la simulación -----------------------------------------
 
   /** La posición nueva es la anterior más la velocidad por dt. */
-  def mover(p: Particula, dt: Double): Particula = ???
+  def mover(p: Particula, dt: Double): Particula =
+    // Posición nueva = posición vieja + velocidad * dt. Lo demás no cambia.
+    Particula(p.pos + p.vel * dt, p.vel, p.masa)
 
   /** Avanza todo el sistema un paso de tiempo dt. */
-  def pasoSecuencial(s: Sistema, dt: Double): Sistema = ???
+  def pasoSecuencial(s: Sistema, dt: Double): Sistema =
+    // Es el segmento que va de 0 al final. Así la versión secuencial y la
+    // paralela hacen el mismo trabajo de la misma forma.
+    pasoSegmento(s, dt, 0, s.length)
 
   /** Avanza solo el tramo entre `desde` incluido y `hasta` excluido. */
-  def pasoSegmento(s: Sistema, dt: Double, desde: Int, hasta: Int): Sistema = ???
+  def pasoSegmento(s: Sistema, dt: Double, desde: Int, hasta: Int): Sistema =
+    // slice toma el tramo [desde, hasta) y map mueve cada partícula
+    s.slice(desde, hasta).map(p => mover(p, dt))
 
   /**
    * Parte el sistema por la mitad con `parallel` mientras el tramo tenga más
    * elementos que el umbral, y por debajo de esa cifra resuelve en secuencial.
    */
-  def pasoParalelo(s: Sistema, dt: Double, umbral: Int): Sistema = ???
+  def pasoParalelo(s: Sistema, dt: Double, umbral: Int): Sistema = {
+    // Un umbral menor que 1 partiría un tramo de 1 elemento para siempre
+    val limite = Math.max(umbral, 1)
+
+    // Resuelve el tramo [desde, hasta)
+    def resolver(desde: Int, hasta: Int): Sistema =
+      if (hasta - desde <= limite) {
+        // Tramo pequeño: se resuelve en secuencial
+        pasoSegmento(s, dt, desde, hasta)
+      } else {
+        // Tramo grande: se parte por la mitad y las dos mitades van en paralelo
+        val mitad = desde + (hasta - desde) / 2
+        val (izquierda, derecha) = parallel(
+          resolver(desde, mitad),
+          resolver(mitad, hasta))
+        // Se pegan en el mismo orden
+        izquierda ++ derecha
+      }
+
+    resolver(0, s.length)
+  }
 
   // Punto 2: magnitudes globales ----------------------------------------------
 
   /** La suma de las energías cinéticas, media masa por velocidad al cuadrado. */
-  def energiaSecuencial(s: Sistema): Double = ???
+  def energiaSecuencial(s: Sistema): Double = {
+    // Energía de una sola partícula
+    def energiaDe(p: Particula): Double =
+      0.5 * p.masa * p.vel.norma * p.vel.norma
+
+    // Si el sistema está vacío, la suma da 0.0
+    s.map(p => energiaDe(p)).sum
+  }
 
   /** La suma de las masas. */
-  def masaTotal(s: Sistema): Double = ???
+  def masaTotal(s: Sistema): Double =
+    s.map(p => p.masa).sum
 
   /**
    * La suma de las posiciones ponderadas por la masa, dividida entre la masa
    * total. Sin masa, el origen.
    */
-  def centroDeMasaSecuencial(s: Sistema): Vector2 = ???
+  def centroDeMasaSecuencial(s: Sistema): Vector2 = {
+    val origen = Vector2(0.0, 0.0)
+    val masa = masaTotal(s)
+
+    if (masa == 0.0) {
+      origen
+    } else {
+      // Suma de las posiciones ponderadas por la masa
+      val sumaPonderada = s
+        .map(p => p.pos * p.masa)
+        .foldLeft(origen)((acumulado, v) => acumulado + v)
+      // Vector2 no tiene división, así que se multiplica por 1/masa
+      sumaPonderada * (1.0 / masa)
+    }
+  }
+
 
   // Punto 3: las mismas magnitudes en paralelo --------------------------------
 

@@ -193,3 +193,158 @@ Pasar de 16 a 32 núcleos agregaría 1,4 a la aceleración, menos de lo que se
 ganó entre 4 y 8. En este cálculo esa décima parte está en partir el arreglo y
 combinar los resultados, y en el acceso a una memoria que comparten los
 dieciséis núcleos.
+
+# Informe de paralelización — Taller 4: simulación de partículas
+ 
+> **Antes de entregar:** las celdas marcadas con `—` y los textos entre
+> corchetes `[ ... ]` son datos que salen de **su** máquina al ejecutar
+> `./gradlew run` (punto 5). Complételos con los números reales y borre esta
+> nota. No se deben inventar tiempos: la rúbrica pide los que produce
+> `App.scala`.
+ 
+## 1. La estrategia de reparto
+ 
+**Dónde se reparte.** El paso de la simulación (`pasoParalelo`, punto 1) es
+el problema ideal para repartir: la partícula $i$ nueva depende solo de la
+partícula $i$ vieja y de `dt`, nunca de las demás. Por eso los tramos del
+arreglo se pueden calcular al mismo tiempo sin coordinarse.
+ 
+**Con qué abstracción.** Con `parallel(a, b)` del paquete `common`, que
+calcula dos expresiones a la vez y devuelve el par de resultados. No se usa
+`task` ni ningún otro mecanismo.
+ 
+**Con qué criterio se deja de partir.** La función interna
+`resolver(desde, hasta)` parte el tramo por la mitad mientras tenga **más**
+elementos que el umbral. Por debajo de esa cifra resuelve el tramo en
+secuencial con `pasoSegmento`. El umbral se toma como mínimo 1 para que la
+recursión siempre termine.
+ 
+```mermaid
+flowchart TD
+    A["resolver(0, n)"] --> Q{"hasta - desde <= umbral ?"}
+    Q -->|"sí"| S["pasoSegmento: map secuencial del tramo"]
+    Q -->|"no"| P["parallel( resolver(desde, mitad), resolver(mitad, hasta) )"]
+    P --> C["izquierda ++ derecha"]
+```
+ 
+**Qué operación combina los resultados parciales.** La concatenación `++` de
+las dos mitades, con la izquierda primero. Es asociativa, así que el
+resultado no depende de cómo quede agrupado el árbol de llamados (la
+demostración está en `correccion.md`, sección 1.7). Como cada partícula se
+mueve exactamente una vez con las mismas operaciones, `pasoParalelo` da
+**exactamente** lo mismo que `pasoSecuencial`.
+ 
+**Qué no se reparte.** Las magnitudes del punto 2 (`energiaSecuencial`,
+`masaTotal`, `centroDeMasaSecuencial`) son secuenciales. Su versión repartida
+es el punto 3.
+ 
+**Cuidado con la comparación justa.** `pasoSecuencial` es
+`pasoSegmento(s, dt, 0, s.length)` y `pasoParalelo` usa `pasoSegmento` en las
+hojas. Las dos recorren el arreglo con `slice` y `map`, así que la diferencia
+de tiempos mide el costo del reparto y no el de dos operaciones distintas.
+ 
+## 2. La tabla de tiempos
+ 
+Máquina donde se midió: **[modelo del procesador]**.
+Núcleos disponibles: **[el valor que imprime `App.scala` en
+`Núcleos disponibles`]**.
+ 
+Los tiempos son la mediana de varias corridas en milisegundos, tomada con
+`medir` después de una corrida de calentamiento. La aceleración es
+$\text{aceleración} = t_{\text{secuencial}} / t_{\text{paralelo}}$.
+ 
+| Partículas $n$ | Umbral | $t_{\text{sec}}$ (ms) | $t_{\text{par}}$ (ms) | Aceleración |
+|---:|---:|---:|---:|---:|
+| 1 000 000 | 1 000 | — | — | — |
+| 1 000 000 | 10 000 | — | — | — |
+| 1 000 000 | 100 000 | — | — | — |
+| 1 000 000 | **1 000 000 (control)** | — | — | **1.0** |
+| 2 000 000 | 1 000 | — | — | — |
+| 2 000 000 | 10 000 | — | — | — |
+| 2 000 000 | 100 000 | — | — | — |
+| 2 000 000 | **2 000 000 (control)** | — | — | **1.0** |
+| 4 000 000 | 1 000 | — | — | — |
+| 4 000 000 | 10 000 | — | — | — |
+| 4 000 000 | 100 000 | — | — | — |
+| 4 000 000 | **4 000 000 (control)** | — | — | **1.0** |
+ 
+**La fila de control.** Con el umbral igual al tamaño del sistema,
+`pasoParalelo` no parte nada y hace exactamente el mismo trabajo que
+`pasoSecuencial`. Por eso la aceleración tiene que dar 1 (con el ruido normal
+de una medición). Si da claramente distinto de 1, la comparación no es justa y
+hay que revisar que las dos versiones hagan el mismo trabajo de la misma forma.
+ 
+Los tamaños son de al menos un millón de partículas: con unos pocos miles, el
+reparto cuesta más de lo que ahorra.
+ 
+## 3. Comparación con la estimación del punto 4
+ 
+El punto 4 estima el costo sin ejecutar nada:
+ 
+```math
+\text{trabajo}(n) = n \qquad
+\text{tiempoEstimado}(n, p, \text{umbral}) = \text{profundidad}(n, \text{umbral}) + \frac{\text{trabajo}(n)}{p}
+```
+ 
+donde $p$ es el número de núcleos y la profundidad es el número de veces que
+se parte a la mitad hasta llegar al umbral, más el trabajo del tramo que queda
+sin partir.
+ 
+| $n$ | Umbral | Aceleración estimada $\dfrac{n}{\text{tiempoEstimado}}$ | Aceleración medida |
+|---:|---:|---:|---:|
+| 1 000 000 | 10 000 | — | — |
+| 1 000 000 | 100 000 | — | — |
+| 4 000 000 | 10 000 | — | — |
+ 
+(La aceleración estimada se calcula con las funciones del punto 4, tomando
+$\text{trabajo}(n)$ como el tiempo secuencial.)
+ 
+**En qué se parecen.** [Describa lo que vea en sus números. Por ejemplo: en
+los dos la aceleración sube cuando aumentan los núcleos y se acerca a un
+tope; y un umbral muy grande deja núcleos sin trabajo tanto en la estimación
+como en la medición.]
+ 
+**En qué no se parecen y a qué lo atribuye.** [Describa la diferencia que vea
+y atribúyala. La estimación cuenta una operación por partícula y supone que
+repartir no cuesta nada. Lo medido incluye costos que el modelo no tiene.
+Conserve solo los que correspondan a sus números:]
+ 
+- **Crear y esperar tareas:** cada `parallel` cuesta tiempo, y con umbrales
+  pequeños hay muchísimas tareas.
+- **Copiar arreglos:** cada `++` crea un arreglo nuevo y copia las dos mitades,
+  trabajo que la versión secuencial no hace.
+- **Memoria:** mover una partícula son pocas operaciones, así que el tiempo lo
+  domina leer y escribir en memoria, que los núcleos comparten.
+- **Recolector de basura y compilador de la máquina virtual:** crean ruido y
+  trabajo extra que el modelo no considera.
+## 4. Lectura de los resultados
+ 
+**Qué umbral resultó conveniente y por qué.** [Diga cuál umbral de la tabla
+dio la mayor aceleración, y explique la razón: con un umbral muy pequeño hay
+demasiadas tareas y el reparto cuesta más de lo que ahorra; con un umbral muy
+grande hay pocas tareas y se dejan núcleos sin trabajo. El conveniente queda en
+el medio. `umbralConveniente` hace esta búsqueda de forma automática.]
+ 
+**Por qué la aceleración deja de crecer aunque se agreguen núcleos.** Una
+parte del cálculo no se reparte: crear el arreglo resultante, copiar al
+concatenar y el recorrido inicial. Si $f$ es la fracción del cálculo que sí se
+reparte, con $p$ núcleos la aceleración es como máximo:
+ 
+```math
+S(p) = \frac{1}{(1 - f) + \dfrac{f}{p}}
+```
+ 
+y aunque $p$ crezca sin límite, $S$ nunca pasa de $\dfrac{1}{1 - f}$. Esa es la
+ley de Amdahl: lo que no se reparte fija el techo.
+ 
+**Fracción del cálculo que no se reparte.** A partir de la aceleración medida
+$S$ y del número de núcleos $p$, la fracción $s = 1 - f$ que no se reparte es:
+ 
+```math
+s = \frac{\dfrac{1}{S} - \dfrac{1}{p}}{1 - \dfrac{1}{p}}
+```
+ 
+Con la mejor aceleración medida $S = [\ \ ]$ y $p = [\ \ ]$ núcleos:
+$s = [\ \ ]$, es decir, cerca del $[\ \ ]\,\%$ del cálculo no se reparte, y la
+aceleración no puede pasar de $1/s = [\ \ ]$ por más núcleos que se agreguen.
+ 
