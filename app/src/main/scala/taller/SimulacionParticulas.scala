@@ -99,24 +99,90 @@ class SimulacionParticulas {
   // Punto 3: las mismas magnitudes en paralelo --------------------------------
 
   /** La energía del sistema, repartida con el mismo umbral del punto 1. */
-  def energiaParalela(s: Sistema, umbral: Int): Double = ???
+  def energiaParalela(s: Sistema, umbral: Int): Double = {
+    val limite = Math.max(umbral, 1)
+
+    def resolver(desde: Int, hasta: Int): Double =
+      if (hasta - desde <= limite) {
+        s.slice(desde, hasta)
+          .map(p => 0.5 * p.masa * p.vel.norma * p.vel.norma)
+          .sum
+      } else {
+        val mitad = desde + (hasta - desde) / 2
+        val (izquierda, derecha) = parallel(
+          resolver(desde, mitad),
+          resolver(mitad, hasta)
+        )
+        izquierda + derecha
+      }
+
+    resolver(0, s.length)
+  }
 
   /**
-   * El centro de masa, repartido. Promediar los promedios de cada mitad da
-   * otra cosa cuando las dos mitades no pesan igual.
-   */
-  def centroDeMasaParalelo(s: Sistema, umbral: Int): Vector2 = ???
+   * El centro de masa, repartido. Cada tramo devuelve la suma ponderada
+   * de posiciones y su masa total; el centro se calcula una sola vez al final.
+  */
+  def centroDeMasaParalelo(s: Sistema, umbral: Int): Vector2 = {
+    val limite = Math.max(umbral, 1)
+    val origen = Vector2(0.0, 0.0)
+
+    def resolver(desde: Int, hasta: Int): (Vector2, Double) =
+      if (hasta - desde <= limite) {
+        val tramo = s.slice(desde, hasta)
+
+        val sumaPonderada = tramo
+          .map(p => p.pos * p.masa)
+          .foldLeft(origen)((acumulado, v) => acumulado + v)
+
+        val masa = tramo.map(p => p.masa).sum
+
+        (sumaPonderada, masa)
+      } else {
+        val mitad = desde + (hasta - desde) / 2
+
+        val (izquierda, derecha) = parallel(
+          resolver(desde, mitad),
+          resolver(mitad, hasta)
+        )
+
+        (
+          izquierda._1 + derecha._1,
+          izquierda._2 + derecha._2
+        )
+      }
+
+    val (sumaPonderada, masa) = resolver(0, s.length)
+
+    if (masa == 0.0)
+      origen
+    else
+      sumaPonderada * (1.0 / masa)
+  }
 
   // Punto 4: trabajo y profundidad --------------------------------------------
 
   /** El número total de operaciones, una por partícula. */
-  def trabajo(n: Int): Int = ???
+  def trabajo(n: Int): Int = n
 
   /** Cuántas veces se parte a la mitad, más el tramo que queda sin partir. */
-  def profundidad(n: Int, umbral: Int): Int = ???
+  def profundidad(n: Int, umbral: Int): Int = { 
+    val limite = Math.max(umbral, 1)
+
+  def resolver(tamano: Int): Int =
+    if (tamano <= 0) 0
+    else if (tamano <= limite) tamano
+    else {
+      val izquierda = tamano / 2
+      val derecha = tamano - izquierda
+      1 + Math.max(resolver(izquierda), resolver(derecha))
+    }
+
+  resolver(n)}
 
   /** La profundidad más el trabajo entre p procesadores. */
-  def tiempoEstimado(n: Int, p: Int, umbral: Int): Double = ???
+  def tiempoEstimado(n: Int, p: Int, umbral: Int): Double =
+    profundidad(n, umbral) + trabajo(n).toDouble / p
 
   // Punto 5: medir la aceleración ---------------------------------------------
 

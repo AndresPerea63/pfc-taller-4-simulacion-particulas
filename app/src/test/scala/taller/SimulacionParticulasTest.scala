@@ -26,6 +26,13 @@ class SimulacionParticulasTest extends AnyFunSuite {
 
   val vacio: Sistema = Array()
 
+  def sistemaDe(n: Int): Sistema = Array.tabulate(n)(i =>
+    Particula(
+    Vector2(i.toDouble, i.toDouble),
+    Vector2(i.toDouble, -i.toDouble),
+    i.toDouble + 1.0
+  ))
+
   val azar = new Random(7)
   val grande: Sistema = Array.fill(1000)(Particula(
     Vector2(azar.nextDouble() * 10, azar.nextDouble() * 10),
