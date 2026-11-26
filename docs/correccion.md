@@ -590,8 +590,272 @@ punto 1 esto no ocurre, porque no se suma nada entre partículas: cada una se
 calcula sola.
  
 ---
+
+## 3. Punto 3: corrección de las magnitudes globales en paralelo
+
+Para argumentar la corrección de las funciones paralelas, se demuestra que dividir un segmento genera dos segmentos disjuntos cuya unión es el original, y que los resultados parciales se pueden combinar mediante operaciones asociativas para obtener el resultado global.
+
+### 3.1 Correctitud de la energía paralela
+
+La energía cinética total de un sistema de \(n\) partículas se define como:
+
+\[
+E(S)=\sum_{i=0}^{n-1}\frac{1}{2}m_i\|\vec v_i\|^2
+\]
+
+Sea \(L=\max(\text{umbral},1)\). Para un segmento de índices \([a,b)\), se consideran dos casos.
+
+**Caso base:** si \(b-a\leq L\), se calcula la energía de cada partícula del segmento y se suman. Por definición, el resultado es:
+
+\[
+E_{[a,b)}=\sum_{i=a}^{b-1}
+\frac{1}{2}m_i\|\vec v_i\|^2
+\]
+
+Por lo tanto, el resultado es correcto para ese segmento.
+
+**Caso recursivo:** si el tamaño del segmento supera el límite, se calcula:
+
+\[
+m=a+\left\lfloor\frac{b-a}{2}\right\rfloor
+\]
+
+El segmento se divide en \([a,m)\) y \([m,b)\). Las energías de ambos segmentos se calculan recursivamente y se suman.
+
+Sea \(e_i=\frac{1}{2}m_i\|\vec v_i\|^2\). Entonces:
+
+\[
+\begin{aligned}
+E_{[a,m)}+E_{[m,b)}
+&=\sum_{i=a}^{m-1}e_i+
+  \sum_{i=m}^{b-1}e_i\\
+&=\sum_{i=a}^{b-1}e_i\\
+&=E_{[a,b)}
+\end{aligned}
+\]
+
+Por lo tanto, combinar las energías de ambas mitades produce la energía del segmento original.
+
+Como cada segmento se resuelve correctamente en el caso base y las divisiones preservan el resultado, por inducción sobre el tamaño del segmento, la función calcula correctamente la energía total del sistema.
+
+### 3.2 Correctitud del centro de masa paralelo
+
+El centro de masa de un sistema con masa total diferente de cero es:
+
+\[
+C(S)=
+\frac{\sum_{i=0}^{n-1}m_i\vec x_i}
+{\sum_{i=0}^{n-1}m_i}
+\]
+
+Si la masa total es cero, el centro de masa se define como el origen.
+
+Para cada segmento \([a,b)\), la función retorna un par \((W,M)\), donde:
+
+\[
+W=\sum_{i=a}^{b-1}m_i\vec x_i
+\]
+
+\[
+M=\sum_{i=a}^{b-1}m_i
+\]
+
+**Caso base:** cuando el tamaño del segmento es menor o igual al umbral, se calcula la suma ponderada de sus posiciones y la suma de sus masas. Por definición, ambos valores corresponden al segmento recibido.
+
+**Caso recursivo:** si el segmento se divide en dos, las llamadas recursivas retornan \((W_1,M_1)\) y \((W_2,M_2)\). Se combinan sumando sus componentes:
+
+\[
+(W_1+W_2,\ M_1+M_2)
+\]
+
+Para la suma ponderada:
+
+\[
+\begin{aligned}
+W_1+W_2
+&=\sum_{i=a}^{m-1}m_i\vec x_i+
+  \sum_{i=m}^{b-1}m_i\vec x_i\\
+&=\sum_{i=a}^{b-1}m_i\vec x_i
+\end{aligned}
+\]
+
+Para la masa:
+
+\[
+\begin{aligned}
+M_1+M_2
+&=\sum_{i=a}^{m-1}m_i+
+  \sum_{i=m}^{b-1}m_i\\
+&=\sum_{i=a}^{b-1}m_i
+\end{aligned}
+\]
+
+Por lo tanto, el par combinado contiene la suma ponderada y la masa total correctas del segmento original.
+
+Al terminar la recursión se obtiene la suma ponderada y la masa total del sistema. Si la masa total es cero, se devuelve el origen; de lo contrario, se divide la suma ponderada entre la masa total, obteniendo el centro de masa definido por el enunciado.
+
+### 3.3 La división en segmentos no pierde ni repite partículas
+
+Sea un segmento \([a,b)\) de tamaño \(k=b-a\). Se divide usando:
+
+\[
+m=a+\left\lfloor\frac{k}{2}\right\rfloor
+\]
+
+Los segmentos resultantes son:
+
+\[
+[a,m)\quad\text{y}\quad[m,b)
+\]
+
+Su unión es el segmento original:
+
+\[
+[a,m)\cup[m,b)=[a,b)
+\]
+
+Y su intersección es vacía:
+
+\[
+[a,m)\cap[m,b)=\emptyset
+\]
+
+Por lo tanto, todos los índices del segmento original pertenecen a alguna de las dos mitades, pero ningún índice pertenece a ambas.
+
+Como esta propiedad se conserva en cada división, los segmentos terminales cubren el sistema completo sin solaparse. En consecuencia, ninguna partícula se pierde ni se procesa más de una vez.
+
+Además, la recursión termina. Cuando un segmento supera el umbral \(L\geq1\), se divide en dos partes estrictamente menores que el segmento original. Como el tamaño disminuye en cada división, eventualmente se alcanzan segmentos que cumplen la condición del caso base.
+
+### 3.4 Asociatividad de las operaciones de combinación
+
+**Energía**
+
+La energía combina resultados mediante la suma de números reales. La suma es asociativa:
+
+\[
+(a+b)+c=a+(b+c)
+\]
+
+Por lo tanto, agrupar las energías parciales de diferentes maneras no modifica el resultado matemático.
+
+**Centro de masa**
+
+Se define la operación de combinación:
+
+\[
+(W_1,M_1)\oplus(W_2,M_2)
+=(W_1+W_2,M_1+M_2)
+\]
+
+Esta operación es asociativa porque:
+
+\[
+\begin{aligned}
+&((W_1,M_1)\oplus(W_2,M_2))\oplus(W_3,M_3)\\
+&=(W_1+W_2+W_3,\ M_1+M_2+M_3)
+\end{aligned}
+\]
+
+Y:
+
+\[
+\begin{aligned}
+&(W_1,M_1)\oplus((W_2,M_2)\oplus(W_3,M_3))\\
+&=(W_1+W_2+W_3,\ M_1+M_2+M_3)
+\end{aligned}
+\]
+
+Ambas agrupaciones producen el mismo resultado. El elemento neutro de la operación es \(((0,0),0)\).
+
+Por consiguiente, los resultados parciales se pueden combinar en paralelo sin alterar el resultado matemático global.
+
+### 3.5 Equivalencia con las versiones secuenciales
+
+Las versiones secuenciales recorren el sistema completo y calculan las sumatorias directamente. Las versiones paralelas calculan las mismas sumatorias sobre segmentos disjuntos y luego combinan sus resultados.
+
+Como la división no pierde ni repite partículas y las operaciones de combinación son asociativas, ambas estrategias obtienen las mismas magnitudes matemáticas:
+
+\[
+E_{\text{paralela}}(S)=E_{\text{secuencial}}(S)
+\]
+
+\[
+C_{\text{paralela}}(S)=C_{\text{secuencial}}(S)
+\]
+
+En la práctica, los valores `Double` pueden presentar pequeñas diferencias debido al orden de las sumas y a la precisión finita de los números de punto flotante. Por esta razón, las pruebas utilizan una tolerancia numérica pequeña en lugar de exigir igualdad exacta.
+
  
-## 3. Resumen de las argumentaciones
+
+ ## 4. Punto 4: correctitud del trabajo, profundidad y tiempo estimado
+
+### 4.1 Correctitud del trabajo
+
+El trabajo se define como el número total de operaciones realizadas sobre las partículas. Dado que se realiza una operación por cada partícula, para un sistema de tamaño \(n\) se tiene:
+
+\[
+W(n)=n
+\]
+
+La función retorna directamente \(n\), por lo que cumple con la definición de trabajo establecida en el enunciado. La distribución entre procesadores no modifica el número total de operaciones necesarias, solamente la forma en que se ejecutan.
+
+### 4.2 Correctitud de la profundidad
+
+Sea \(L=\max(\text{umbral},1)\). La profundidad se define considerando dos casos:
+
+\[
+D(n,L)=
+\begin{cases}
+0 & n\leq 0\\
+n & 0<n\leq L\\
+1+\max\left(D\left(\left\lfloor\frac n2\right\rfloor,L\right),D\left(\left\lceil\frac n2\right\rceil,L\right)\right & n>L
+\end{cases}
+\]
+
+**Caso base:** cuando \(n\) no supera el umbral, el sistema no se divide y se resuelve secuencialmente. Por lo tanto, la profundidad corresponde al tamaño del segmento restante.
+
+**Caso recursivo:** cuando \(n>L\), el sistema se divide en dos segmentos de tamaños:
+
+\[
+n_1=\left\lfloor\frac n2\right\rfloor
+\]
+
+\[
+n_2=n-n_1=\left\lceil\frac n2\right\rceil
+\]
+
+La profundidad es una unidad por la división realizada, más la profundidad del segmento que requiere el camino de ejecución más largo:
+
+\[
+D(n,L)=1+\max(D(n_1,L),D(n_2,L))
+\]
+
+Esto corresponde a la estructura del árbol de división. Como los dos segmentos son menores que el segmento original cuando ocurre una división, la recursión termina alcanzando el caso base.
+
+Por lo tanto, la profundidad calculada corresponde al número de divisiones del camino más largo más el trabajo secuencial del segmento terminal de ese camino.
+
+### 4.3 Correctitud del tiempo estimado
+
+El tiempo estimado se define como:
+
+\[
+T(n,p,L)=D(n,L)+\frac{W(n)}p
+\]
+
+La función combina la profundidad calculada con el trabajo total dividido entre el número de procesadores \(p\).
+
+Como `trabajo` retorna \(n\) y `profundidad` calcula la profundidad según la división y el umbral, el tiempo estimado corresponde a la expresión definida en el enunciado:
+
+\[
+T(n,p,L)=D(n,L)+\frac np
+\]
+
+Esta estimación no ejecuta el algoritmo ni mide tiempos reales. Es un modelo teórico que permite aproximar el costo de ejecución considerando la parte secuencial del camino crítico y la distribución del trabajo entre los procesadores.
+
+Los valores estimados pueden utilizarse posteriormente como referencia para contrastarlos con los tiempos medidos, aunque ambos no necesariamente coinciden debido a los costos de crear tareas, sincronizar resultados y otros factores de ejecución.
+
+
+## 5. Resumen de las argumentaciones
  
 | Afirmación | Cómo se argumenta |
 |---|---|
@@ -603,4 +867,3 @@ calcula sola.
 | `energiaSecuencial`, `masaTotal` cumplen la especificación | Definición de `map` y `sum` (secciones 2.1 y 2.2) |
 | `centroDeMasaSecuencial` cumple la especificación | Invariante de `foldLeft` (sección 2.3) |
 | La suma de números y de vectores es asociativa | Propiedad de la suma en $\mathbb{R}$, componente a componente (sección 2.4) |
- 
