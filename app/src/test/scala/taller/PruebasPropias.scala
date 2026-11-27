@@ -125,4 +125,32 @@ class PruebasPropias extends AnyFunSuite {
     assert(cerca(tiempoEstimado(17, 4, 1), 10.25))
   }
 
+  // Punto 5 -------------------------------------------------------------------
+
+  test("Punto 5 propio: aceleración con tiempos 90 y 30 da 3.0") {
+    assert(cerca(aceleracion(90.0, 30.0), 3.0))
+  }
+
+  test("Punto 5 propio: aceleración menor que 1 cuando el paralelo tarda más") {
+    assert(cerca(aceleracion(40.0, 80.0), 0.5))
+  }
+
+  test("Punto 5 propio: aceleración con tiempo secuencial cero da 0.0") {
+    assert(cerca(aceleracion(0.0, 5.0), 0.0))
+  }
+
+  test("Punto 5 propio: umbralConveniente con un solo candidato lo devuelve") {
+    assert(umbralConveniente(grande, 0.25, List(100)) == 100)
+  }
+
+  test("Punto 5 propio: umbralConveniente sin candidatos devuelve el tamaño") {
+    assert(umbralConveniente(vacio, 0.5, Nil) == 0)
+    assert(umbralConveniente(grande, 0.5, Nil) == 1000)
+  }
+
+  test("Punto 5 propio: umbralConveniente con candidatos no positivos") {
+    val candidatos = List(-3, 0, 500)
+    assert(candidatos.contains(umbralConveniente(grande, 0.5, candidatos)))
+  }
+
 }
