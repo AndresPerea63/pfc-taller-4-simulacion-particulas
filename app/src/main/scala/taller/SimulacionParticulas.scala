@@ -195,11 +195,23 @@ class SimulacionParticulas {
   }
 
   /** El cociente entre el tiempo secuencial y el paralelo. */
-  def aceleracion(tSecuencial: Double, tParalelo: Double): Double = ???
+  def aceleracion(tSecuencial: Double, tParalelo: Double): Double =
+    // Cuántas veces cabe el tiempo paralelo en el secuencial
+    tSecuencial / tParalelo
 
   /**
    * El umbral que menos tarda de una lista de candidatos. Con la lista vacía,
    * el tamaño del sistema, que equivale a no repartir.
    */
-  def umbralConveniente(s: Sistema, dt: Double, umbrales: List[Int]): Int = ???
+  def umbralConveniente(s: Sistema, dt: Double, umbrales: List[Int]): Int =
+    if (umbrales.isEmpty) {
+      // Sin candidatos no se reparte: el umbral es el tamaño del sistema
+      s.length
+    } else {
+      // Se mide cada candidato y se queda el de menor tiempo
+      umbrales
+        .map(u => (u, medir(3)(pasoParalelo(s, dt, u))))
+        .minBy(par => par._2)
+        ._1
+    }
 }
