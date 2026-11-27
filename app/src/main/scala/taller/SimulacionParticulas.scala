@@ -1,6 +1,7 @@
 package taller
 
 import common._
+import org.scalameter._
 
 /**
  * Taller 4 — simulación de partículas repartida entre varios núcleos.
@@ -98,44 +99,119 @@ class SimulacionParticulas {
   // Punto 3: las mismas magnitudes en paralelo --------------------------------
 
   /** La energía del sistema, repartida con el mismo umbral del punto 1. */
-  def energiaParalela(s: Sistema, umbral: Int): Double = ???
+  def energiaParalela(s: Sistema, umbral: Int): Double = {
+    val limite = Math.max(umbral, 1)
+
+    def resolver(desde: Int, hasta: Int): Double =
+      if (hasta - desde <= limite) {
+        s.slice(desde, hasta)
+          .map(p => 0.5 * p.masa * p.vel.norma * p.vel.norma)
+          .sum
+      } else {
+        val mitad = desde + (hasta - desde) / 2
+        val (izquierda, derecha) = parallel(
+          resolver(desde, mitad),
+          resolver(mitad, hasta)
+        )
+        izquierda + derecha
+      }
+
+    resolver(0, s.length)
+  }
 
   /**
-   * El centro de masa, repartido. Promediar los promedios de cada mitad da
-   * otra cosa cuando las dos mitades no pesan igual.
-   */
-  def centroDeMasaParalelo(s: Sistema, umbral: Int): Vector2 = ???
+   * El centro de masa, repartido. Cada tramo devuelve la suma ponderada
+   * de posiciones y su masa total; el centro se calcula una sola vez al final.
+  */
+  def centroDeMasaParalelo(s: Sistema, umbral: Int): Vector2 = {
+    val limite = Math.max(umbral, 1)
+    val origen = Vector2(0.0, 0.0)
+
+    def resolver(desde: Int, hasta: Int): (Vector2, Double) =
+      if (hasta - desde <= limite) {
+        val tramo = s.slice(desde, hasta)
+
+        val sumaPonderada = tramo
+          .map(p => p.pos * p.masa)
+          .foldLeft(origen)((acumulado, v) => acumulado + v)
+
+        val masa = tramo.map(p => p.masa).sum
+
+        (sumaPonderada, masa)
+      } else {
+        val mitad = desde + (hasta - desde) / 2
+
+        val (izquierda, derecha) = parallel(
+          resolver(desde, mitad),
+          resolver(mitad, hasta)
+        )
+
+        (
+          izquierda._1 + derecha._1,
+          izquierda._2 + derecha._2
+        )
+      }
+
+    val (sumaPonderada, masa) = resolver(0, s.length)
+
+    if (masa == 0.0)
+      origen
+    else
+      sumaPonderada * (1.0 / masa)
+  }
 
   // Punto 4: trabajo y profundidad --------------------------------------------
 
   /** El número total de operaciones, una por partícula. */
-  def trabajo(n: Int): Int = ???
+  def trabajo(n: Int): Int = n
 
   /** Cuántas veces se parte a la mitad, más el tramo que queda sin partir. */
-  def profundidad(n: Int, umbral: Int): Int = ???
+  def profundidad(n: Int, umbral: Int): Int = { 
+    val limite = Math.max(umbral, 1)
+
+  def resolver(tamano: Int): Int =
+    if (tamano <= 0) 0
+    else if (tamano <= limite) tamano
+    else {
+      val izquierda = tamano / 2
+      val derecha = tamano - izquierda
+      1 + Math.max(resolver(izquierda), resolver(derecha))
+    }
+
+  resolver(n)}
 
   /** La profundidad más el trabajo entre p procesadores. */
-  def tiempoEstimado(n: Int, p: Int, umbral: Int): Double = ???
+  def tiempoEstimado(n: Int, p: Int, umbral: Int): Double =
+    profundidad(n, umbral) + trabajo(n).toDouble / p
 
   // Punto 5: medir la aceleración ---------------------------------------------
 
-  /** Mediana de varias corridas, en milisegundos, tras una de calentamiento. */
+  /** Mediana de varias mediciones de ScalaMeter, en milisegundos. */
   def medir[A](repeticiones: Int)(cuerpo: => A): Double = {
-    cuerpo
     val muestras = Vector.fill(repeticiones) {
-      val inicio = System.nanoTime()
-      cuerpo
-      (System.nanoTime() - inicio) / 1e6
+      (withWarmer(new Warmer.Default) measure { cuerpo }).value
     }
     muestras.sorted.apply(muestras.length / 2)
   }
 
   /** El cociente entre el tiempo secuencial y el paralelo. */
-  def aceleracion(tSecuencial: Double, tParalelo: Double): Double = ???
+  def aceleracion(tSecuencial: Double, tParalelo: Double): Double =
+    // Cuántas veces cabe el tiempo paralelo en el secuencial
+    tSecuencial / tParalelo
 
   /**
    * El umbral que menos tarda de una lista de candidatos. Con la lista vacía,
    * el tamaño del sistema, que equivale a no repartir.
    */
-  def umbralConveniente(s: Sistema, dt: Double, umbrales: List[Int]): Int = ???
+  def umbralConveniente(s: Sistema, dt: Double, umbrales: List[Int]): Int =
+    if (umbrales.isEmpty) {
+      // Sin candidatos no se reparte: el umbral es el tamaño del sistema
+      s.length
+    } else {
+      // Se mide cada candidato y se queda el de menor tiempo
+      umbrales
+        .map(u => (u, medir(3)(pasoParalelo(s, dt, u))))
+        .minBy(par => par._2)
+        ._1
+    }
 }

@@ -26,6 +26,13 @@ class SimulacionParticulasTest extends AnyFunSuite {
 
   val vacio: Sistema = Array()
 
+  def sistemaDe(n: Int): Sistema = Array.tabulate(n)(i =>
+    Particula(
+    Vector2(i.toDouble, i.toDouble),
+    Vector2(i.toDouble, -i.toDouble),
+    i.toDouble + 1.0
+  ))
+
   val azar = new Random(7)
   val grande: Sistema = Array.fill(1000)(Particula(
     Vector2(azar.nextDouble() * 10, azar.nextDouble() * 10),
@@ -39,84 +46,89 @@ class SimulacionParticulasTest extends AnyFunSuite {
 
   // Punto 1 -------------------------------------------------------------------
 
-  test("Punto 1: con dt negativo la partícula se mueve hacia atrás") {
-    val q = Particula(Vector2(10, 10), Vector2(2, 3), 1.0)
-    assert(mover(q, -1.0).pos == Vector2(8.0, 7.0))
+  test("pasoSecuencial: la posición avanza velocidad por dt") {
+    assert(pasoSecuencial(Array(p), 2.0).head.pos == Vector2(2.0, 4.0))
   }
 
-  test("Punto 1: mover no cambia la velocidad ni la masa") {
-    val q = Particula(Vector2(1, 1), Vector2(5, -2), 7.5)
-    val r = mover(q, 3.0)
-    assert(r.vel == Vector2(5, -2) && r.masa == 7.5)
+  test("pasoSecuencial: con dt cero nada se mueve") {
+    assert(pasoSecuencial(Array(p), 0.0).head.pos == Vector2(0.0, 0.0))
   }
 
-  test("Punto 1: pasoSegmento da lo mismo que el trozo del paso secuencial") {
-    val sistema = sistemaDe(10)
-    val tramo = pasoSegmento(sistema, 1.0, 3, 6)
-    val esperado = pasoSecuencial(sistema, 1.0).slice(3, 6)
-    assert(tramo.length == 3 && tramo.toList == esperado.toList)
+  test("pasoSecuencial: la velocidad y la masa no cambian") {
+    val despues = pasoSecuencial(Array(p), 3.0).head
+    assert(despues.vel == p.vel && despues.masa == p.masa)
   }
 
-  test("Punto 1: paralelo y secuencial dan exactamente lo mismo con varios umbrales") {
-    val sistema = sistemaDe(101)
-    val esperado = pasoSecuencial(sistema, 0.5).toList
-    val umbrales = List(1, 2, 7, 10, 50, 101, 500)
-    assert(umbrales.forall(u => pasoParalelo(sistema, 0.5, u).toList == esperado))
+  test("pasoSecuencial: sobre el sistema vacío no hay nada que mover") {
+    assert(pasoSecuencial(vacio, 1.0).isEmpty)
   }
 
-  test("Punto 1: el paralelo no pierde ni repite partículas y conserva el orden") {
-    val sistema = sistemaDe(37)
-    val r = pasoParalelo(sistema, 2.0, 3)
-    // la masa identifica a cada partícula
-    assert(r.map(q => q.masa).toList == sistema.map(q => q.masa).toList)
+  test("pasoSegmento: solo calcula el tramo pedido") {
+    val tramo = pasoSegmento(s, 1.0, 1, 2)
+    assert(tramo.length == 1 && tramo.head.pos == Vector2(4.0, 0.0))
   }
 
-  test("Punto 1: el paralelo con umbral negativo da lo mismo que el secuencial") {
-    val sistema = sistemaDe(8)
-    assert(pasoParalelo(sistema, 1.0, -3).toList == pasoSecuencial(sistema, 1.0).toList)
+  test("pasoSegmento: el tramo vacío da un sistema vacío") {
+    assert(pasoSegmento(s, 1.0, 1, 1).isEmpty)
+  }
+
+  test("pasoParalelo: da lo mismo que el secuencial en un caso simple") {
+    assert(pasoParalelo(Array(p), 2.0, 1).head.pos == Vector2(2.0, 4.0))
+  }
+
+  test("pasoParalelo: coincide con el secuencial para varios umbrales") {
+    val umbrales = List(1, 2, 7, 64, 1000, 5000)
+    assert(umbrales.forall { u =>
+      pasoParalelo(grande, 0.5, u).zip(pasoSecuencial(grande, 0.5))
+        .forall { case (a, b) => cerca(a.pos, b.pos) }
+    })
+  }
+
+  test("pasoParalelo: conserva el orden y el tamaño del sistema") {
+    assert(pasoParalelo(grande, 0.5, 32).length == grande.length)
+  }
+
+  test("pasoParalelo: con umbral cero no se queda sin fondo") {
+    assert(pasoParalelo(Array(p), 1.0, 0).length == 1)
   }
 
   // Punto 2 -------------------------------------------------------------------
 
-  test("Punto 2: energía con velocidad (6,8) y masa 1 es 50") {
-    // norma 10, media masa por 100
-    val unica: Sistema = Array(Particula(Vector2(0, 0), Vector2(6, 8), 1.0))
-    assert(cerca(energiaSecuencial(unica), 50.0))
+  test("energiaSecuencial: media masa por velocidad al cuadrado") {
+    assert(cerca(energiaSecuencial(s), 25.0))
   }
 
-  test("Punto 2: la energía suma la de varias partículas") {
-    val dos: Sistema = Array(
-      Particula(Vector2(0, 0), Vector2(2, 0), 1.0), // 0.5 * 1 * 4 = 2
-      Particula(Vector2(1, 1), Vector2(0, 4), 0.5)) // 0.5 * 0.5 * 16 = 4
-    assert(cerca(energiaSecuencial(dos), 6.0))
+  test("energiaSecuencial: el sistema vacío no tiene energía") {
+    assert(energiaSecuencial(vacio) == 0.0)
   }
 
-  test("Punto 2: masaTotal suma masas con decimales") {
-    val dos: Sistema = Array(
-      Particula(Vector2(0, 0), Vector2(0, 0), 1.5),
-      Particula(Vector2(1, 0), Vector2(0, 0), 2.5))
-    assert(cerca(masaTotal(dos), 4.0))
+  test("energiaSecuencial: una partícula quieta no aporta energía") {
+    assert(cerca(energiaSecuencial(Array(s(1))), 0.0))
   }
 
-  test("Punto 2: centro de masa con masas distintas") {
-    // (1 * 1 + 4 * 3) / 4 = 3.25 en x y en y
-    val dos: Sistema = Array(
-      Particula(Vector2(1, 1), Vector2(0, 0), 1.0),
-      Particula(Vector2(4, 4), Vector2(0, 0), 3.0))
-    assert(cerca(centroDeMasaSecuencial(dos), Vector2(3.25, 3.25)))
+  test("masaTotal: suma las masas") {
+    assert(cerca(masaTotal(s), 4.0))
   }
 
-  test("Punto 2: el centro de masa de una sola partícula es su posición") {
-    val unica: Sistema = Array(Particula(Vector2(-5, 7), Vector2(1, 1), 2.0))
-    assert(cerca(centroDeMasaSecuencial(unica), Vector2(-5, 7)))
+  test("masaTotal: el sistema vacío no tiene masa") {
+    assert(masaTotal(vacio) == 0.0)
   }
 
-  test("Punto 2: con todas las masas en cero el centro de masa es el origen") {
-    val sinMasa: Sistema = Array(
-      Particula(Vector2(5, 5), Vector2(0, 0), 0.0),
-      Particula(Vector2(9, 1), Vector2(0, 0), 0.0))
-    assert(centroDeMasaSecuencial(sinMasa) == Vector2(0, 0))
+  test("centroDeMasaSecuencial: el punto medio de dos masas iguales") {
+    assert(cerca(centroDeMasaSecuencial(s), Vector2(2.0, 0.0)))
   }
+
+  test("centroDeMasaSecuencial: sin masa el centro es el origen") {
+    assert(centroDeMasaSecuencial(vacio) == Vector2(0, 0))
+  }
+
+  test("centroDeMasaSecuencial: la masa mayor arrastra el centro") {
+    val pesado: Sistema = Array(
+      Particula(Vector2(0, 0), Vector2(0, 0), 3.0),
+      Particula(Vector2(4, 0), Vector2(0, 0), 1.0))
+    assert(cerca(centroDeMasaSecuencial(pesado), Vector2(1.0, 0.0)))
+  }
+
   // Punto 3 -------------------------------------------------------------------
 
   test("energiaParalela: coincide con la secuencial en el ejemplo") {

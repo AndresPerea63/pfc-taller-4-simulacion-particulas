@@ -370,8 +370,193 @@ Casos especiales: con el sistema vacío, o con todas las masas en cero, la masa
 total es `0.0` y la función devuelve `Vector2(0, 0)` sin dividir.
  
 ---
+
+## 3. Punto 3: magnitudes globales en paralelo
+
+En este punto se distribuyen los cálculos de energía y centro de masa entre varios segmentos del sistema. Ambas funciones siguen una estrategia de divide y vencerás: si el segmento supera el umbral, se divide en dos mitades que se procesan usando `parallel`; cuando el segmento tiene un tamaño menor o igual al umbral, se resuelve secuencialmente.
+
+### 3.1 Energía paralela
+
+La energía cinética de cada partícula se calcula multiplicando la mitad de su masa por el cuadrado de la norma de su velocidad. La energía total se obtiene sumando las energías de todas las partículas.
+
+La función comienza considerando el sistema completo. Si el tamaño del segmento supera el umbral, se calcula su punto medio y se divide en dos segmentos. Ambas mitades calculan su energía de manera independiente y, al terminar, se suman sus resultados. Este proceso continúa hasta que todos los segmentos alcanzan el caso secuencial.
+
+**Ejemplo**
+
+Se considera un sistema de tres partículas:
+
+| Partícula | Masa | Velocidad | Energía cinética |
+|---|---:|---|---:|
+| A | 1 | (3, 4) | 12.5 |
+| B | 2 | (0, 2) | 4.0 |
+| C | 3 | (1, 0) | 1.5 |
+
+Se utiliza un umbral de 1, por lo que la división se realiza hasta obtener segmentos de una partícula.
+
+Traza de la ejecución:
+
+- El segmento de tres partículas se divide en A y el segmento BC.
+- A se resuelve secuencialmente y retorna 12.5.
+- BC se divide en B y C.
+- B retorna 4.0 y C retorna 1.5.
+- Se combinan B y C, obteniendo 5.5.
+- Finalmente, se combina A con BC, obteniendo 18.0.
+
+La energía total del sistema es **18.0**.
+
+### 3.2 Centro de masa paralelo
+
+El centro de masa necesita tener en cuenta la masa de cada partícula, por lo que no se pueden combinar directamente los centros de masa de los segmentos.
+
+Cada segmento retorna dos resultados: la suma de las posiciones ponderadas por sus masas y la masa total del segmento. Cuando se divide el sistema, ambas mitades se procesan en paralelo y se combinan sumando sus vectores ponderados y sus masas.
+
+Al terminar todas las divisiones, se obtiene la suma ponderada de las posiciones y la masa total del sistema. Si la masa total es cero, se retorna el origen; en caso contrario, se divide la suma ponderada entre la masa total.
+
+**Ejemplo**
+
+Se considera el siguiente sistema:
+
+| Partícula | Posición | Masa |
+|---|---|---:|
+| A | (0, 0) | 1 |
+| B | (2, 0) | 2 |
+| C | (4, 0) | 3 |
+
+Con umbral 1, se divide primero A y BC; posteriormente BC se divide en B y C.
+
+Los resultados parciales son:
+
+| Segmento | Suma ponderada | Masa total |
+|---|---|---:|
+| A | (0, 0) | 1 |
+| B | (4, 0) | 2 |
+| C | (12, 0) | 3 |
+| BC combinado | (16, 0) | 5 |
+| ABC combinado | (16, 0) | 6 |
+
+Finalmente, la suma ponderada se divide entre la masa total:
+
+\[
+C=\left(\frac{16}{6},\frac{0}{6}\right)
+\]
+
+El centro de masa obtenido es aproximadamente **(2.6667, 0)**.
+
+### 3.3 Estructura de las llamadas
+
+Las dos funciones siguen una estructura de división similar. La diferencia está en los resultados parciales que retorna cada segmento y en la forma en que se combinan.
+
+```mermaid
+flowchart TD
+    A["Sistema completo"] --> B["Dividir en segmentos"]
+    B --> C["Segmento izquierdo"]
+    B --> D["Segmento derecho"]
+    C --> E["Resolver según umbral"]
+    D --> F["Resolver según umbral"]
+    E --> G["Combinar resultados"]
+    F --> G
+    G --> H["Resultado global"]
+```
+
+En energía se combinan valores numéricos mediante sumas. En centro de masa se combinan las sumas ponderadas de posiciones y las masas totales, realizando la división solamente al finalizar.
  
-## 3. Resumen
+
+ ## 4. Punto 4: trabajo y profundidad
+
+En este punto se estiman los costos de un cálculo paralelo sin ejecutarlo. Se consideran el trabajo total, la profundidad de la recursión y el tiempo estimado cuando el trabajo se distribuye entre varios procesadores.
+
+### 4.1 Trabajo
+
+El trabajo representa el número total de operaciones necesarias para procesar las partículas. Como se realiza una operación por cada partícula, el trabajo crece directamente con el tamaño del sistema.
+
+Por ejemplo, para un sistema de 100 partículas, el trabajo es 100. Dividir el sistema entre varios procesadores no reduce la cantidad total de operaciones que deben realizarse, sino que permite ejecutarlas simultáneamente.
+
+### 4.2 Profundidad
+
+La profundidad representa el número de niveles de división que se realizan hasta alcanzar el umbral, sumado al trabajo del segmento que queda sin dividir.
+
+Si el tamaño del sistema no supera el umbral, no se realizan divisiones y la profundidad corresponde al tamaño del segmento que se resuelve secuencialmente.
+
+Si el tamaño supera el umbral, se divide en dos mitades. La profundidad se obtiene sumando una unidad correspondiente a la división realizada y tomando la profundidad de la mitad que requiere más trabajo. Esto representa el camino más largo de ejecución dentro del árbol de llamadas.
+
+**Ejemplo 1: 16 partículas y umbral 4**
+
+El sistema se divide de la siguiente manera:
+
+```mermaid
+flowchart TD
+    A["16"] --> B["8"]
+    A --> C["8"]
+    B --> D["4"]
+    B --> E["4"]
+    C --> F["4"]
+    C --> G["4"]
+```
+
+Cada segmento de tamaño 4 alcanza el umbral y se resuelve secuencialmente. Se realizan dos niveles de división, y el tramo final tiene 4 elementos.
+
+La profundidad es:
+
+\[
+D(16,4)=1+D(8,4)
+\]
+
+\[
+D(8,4)=1+D(4,4)
+\]
+
+\[
+D(4,4)=4
+\]
+
+Por lo tanto:
+
+\[
+D(16,4)=1+1+4=6
+\]
+
+**Ejemplo 2: 10 partículas y umbral 3**
+
+Como el sistema no se divide exactamente en mitades iguales, se generan segmentos de tamaños distintos:
+
+- 10 se divide en 5 y 5.
+- Cada segmento de 5 se divide en 2 y 3.
+- Los segmentos resultantes ya no superan el umbral.
+
+La profundidad corresponde a dos niveles de división y al mayor trabajo secuencial restante, que es 3:
+
+\[
+D(10,3)=1+1+3=5
+\]
+
+### 4.3 Tiempo estimado
+
+El tiempo estimado combina la profundidad con el trabajo distribuido entre los procesadores disponibles.
+
+Se considera que la profundidad representa el componente que no puede eliminarse mediante la distribución, mientras que el trabajo total se divide entre el número de procesadores.
+
+Por ejemplo, para 100 partículas, 5 procesadores y umbral 10:
+
+- Trabajo total: 100.
+- Profundidad: 11.
+- Trabajo dividido entre procesadores: 20.
+
+El tiempo estimado es:
+
+\[
+T(100,5,10)=11+\frac{100}{5}
+\]
+
+\[
+T(100,5,10)=31
+\]
+
+Este valor permite estimar el costo de la ejecución paralela y compararlo posteriormente con las mediciones reales.
+
+
+
+
+## 5. Resumen
  
 | Función | Qué recorre | Cómo combina |
 |---|---|---|
@@ -382,5 +567,3 @@ total es `0.0` y la función devuelve `Vector2(0, 0)` sin dividir.
 | `energiaSecuencial` | todo el sistema | `sum` de las energías |
 | `masaTotal` | todo el sistema | `sum` de las masas |
 | `centroDeMasaSecuencial` | todo el sistema | `foldLeft` con la suma de vectores y una sola división al final |
- 
-
