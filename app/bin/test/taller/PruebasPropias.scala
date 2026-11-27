@@ -29,7 +29,6 @@ class PruebasPropias extends AnyFunSuite {
     Math.abs(a.x - b.x) < 1e-6 &&
     Math.abs(a.y - b.y) < 1e-6
 
-<<<<<<< HEAD
 // Punto 1 -------------------------------------------------------------------
 
   test("Punto 1: con dt negativo la partícula se mueve hacia atrás") {
@@ -110,6 +109,7 @@ class PruebasPropias extends AnyFunSuite {
       Particula(Vector2(9, 1), Vector2(0, 0), 0.0))
     assert(centroDeMasaSecuencial(sinMasa) == Vector2(0, 0))
   }
+
 
 
 =======
@@ -210,9 +210,6 @@ class PruebasPropias extends AnyFunSuite {
     assert(cerca(tiempoEstimado(17, 4, 1), 10.25))
   }
 
-<<<<<<< HEAD
-}
-=======
   // Punto 5 -------------------------------------------------------------------
 
   test("Punto 5 propio: aceleración con tiempos 90 y 30 da 3.0") {
@@ -242,4 +239,7 @@ class PruebasPropias extends AnyFunSuite {
   }
 
 }
+<<<<<<< HEAD
+>>>>>>> 368929c84a635267d50f5cca45fea3c96b189803
+=======
 >>>>>>> 368929c84a635267d50f5cca45fea3c96b189803
